@@ -206,7 +206,13 @@ class MemberRepository @Inject constructor(
     }
 
     private suspend fun pushMember(member: Member) {
-        membersTable.upsert(member.toUpsertDto())
+        // Ensure we always include the current uid to satisfy RLS policies on Supabase.
+        val uid = member.uid ?: supabase.client.auth.currentSessionOrNull()?.user?.id
+            ?: error("No auth user available for push")
+        val withUid = member.copy(uid = uid)
+
+        // Explicitly upsert on id so updates (e.g., expiration changes) are applied remotely.
+        membersTable.upsert(withUid.toUpsertDto(), onConflict = "id")
     }
 
     private suspend fun recordPayment(memberId: Long, amount: Double) {
