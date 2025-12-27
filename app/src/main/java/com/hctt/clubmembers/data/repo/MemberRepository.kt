@@ -65,22 +65,28 @@ class MemberRepository @Inject constructor(
         val id = existingId
         val resolvedUid = uid ?: supabase.client.auth.currentSessionOrNull()?.user?.id
         if (id != null) {
-            val avatarPath = avatarInput?.let { stream ->
-                val key = "${id}.jpg"
-                runCatching { uploadAvatar(key, stream) }
-                    .onFailure { it.printStackTrace() }
-                    .getOrNull()?.let { key }
+            val existing = dao.getById(id)
+            val avatarKey = when {
+                avatarInput == null -> existing?.avatarUrl
+                !existing?.avatarUrl.isNullOrBlank() -> existing?.avatarUrl
+                !resolvedUid.isNullOrBlank() -> "${resolvedUid}.jpg"
+                else -> "${id}.jpg"
             }
+            val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
+                runCatching { uploadAvatar(avatarKey!!, avatarInput) }
+                    .onFailure { it.printStackTrace() }
+                    .getOrNull()?.let { avatarKey }
+            } else avatarKey
             val entity = MemberEntity(
                 id = id,
                 name = name,
                 email = email,
                 phone = phone,
                 expiration = expiration,
-                avatarUrl = avatarPath,
+                avatarUrl = avatarPath ?: existing?.avatarUrl,
                 paymentAmount = paymentAmount,
                 updatedAt = now,
-                uid = resolvedUid,
+                uid = existing?.uid ?: resolvedUid,
                 isDeleted = false
             )
             dao.upsert(entity)
@@ -103,12 +109,14 @@ class MemberRepository @Inject constructor(
 
             val localId = dao.insertAndReturn(baseEntity)
 
-            val avatarPath = avatarInput?.let { stream ->
-                val key = "${localId}.jpg"
-                runCatching { uploadAvatar(key, stream) }
+            val avatarKey = if (avatarInput != null) {
+                resolvedUid?.let { "${it}.jpg" } ?: "${localId}.jpg"
+            } else null
+            val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
+                runCatching { uploadAvatar(avatarKey!!, avatarInput) }
                     .onFailure { it.printStackTrace() }
-                    .getOrNull()?.let { key }
-            }
+                    .getOrNull()?.let { avatarKey }
+            } else null
 
             val entityWithAvatar = baseEntity.copy(id = localId, avatarUrl = avatarPath)
             dao.upsert(entityWithAvatar)
@@ -143,32 +151,62 @@ class MemberRepository @Inject constructor(
     }.getOrDefault(emptyList())
 
     suspend fun pullLatest() {
-        runCatching {
-            val remote = membersTable.select()
-                .decodeList<MemberDto>()
-                .map { it.toEntity() }
-            Log.d(tag, "pullLatest remote size=${remote.size}")
-            val remoteIds = remote.mapNotNull { it.id }
-            if (remoteIds.isNotEmpty()) {
-                dao.deleteNotIn(remoteIds)
-            } else {
-                dao.deleteAll()
-            }
-            remote.forEach { incoming ->
-                val local = dao.getById(incoming.id)
-                val shouldReplace = local == null || incoming.updatedAt.isAfter(local.updatedAt)
-                if (shouldReplace) {
-                    val merged = if (local != null) incoming.copy(paymentAmount = local.paymentAmount) else incoming
-                    dao.upsert(merged)
+        runCatching { mergeRemoteIntoLocal(fetchRemoteMembers()) }
+            .onFailure { Log.e(tag, "pullLatest failed", it) }
+    }
+
+    suspend fun syncBidirectional() {
+        try {
+            val remote = fetchRemoteMembers()
+            val remoteById = remote.associateBy { it.id }
+            val local = dao.getAll()
+            val localById = local.associateBy { it.id }
+
+            // Push local changes that are newer than remote or missing remotely.
+            local.forEach { localMember ->
+                val remoteMember = remoteById[localMember.id]
+                val shouldPush = remoteMember == null || localMember.updatedAt.isAfter(remoteMember.updatedAt)
+                if (shouldPush) {
+                    pushMember(localMember.toDomain())
                 }
             }
-        }.onFailure {
-            Log.e(tag, "pullLatest failed", it)
+
+            // Merge remote changes back into local (preserving local paymentAmount field).
+            mergeRemoteIntoLocal(remote, localById)
+        } catch (t: Throwable) {
+            Log.e(tag, "syncBidirectional failed", t)
+            throw t
+        }
+    }
+
+    private suspend fun fetchRemoteMembers(): List<MemberEntity> =
+        membersTable.select()
+            .decodeList<MemberDto>()
+            .map { it.toEntity() }
+
+    private suspend fun mergeRemoteIntoLocal(
+        remote: List<MemberEntity>,
+        localById: Map<Long, MemberEntity> = emptyMap()
+    ) {
+        Log.d(tag, "mergeRemoteIntoLocal remote size=${remote.size}")
+        val remoteIds = remote.mapNotNull { it.id }
+        if (remoteIds.isNotEmpty()) {
+            dao.deleteNotIn(remoteIds)
+        } else {
+            dao.deleteAll()
+        }
+        remote.forEach { incoming ->
+            val local = localById[incoming.id] ?: dao.getById(incoming.id)
+            val shouldReplace = local == null || incoming.updatedAt.isAfter(local.updatedAt)
+            if (shouldReplace) {
+                val merged = if (local != null) incoming.copy(paymentAmount = local.paymentAmount) else incoming
+                dao.upsert(merged)
+            }
         }
     }
 
     private suspend fun pushMember(member: Member) {
-        runCatching { membersTable.upsert(member.toUpsertDto()) }
+        membersTable.upsert(member.toUpsertDto())
     }
 
     private suspend fun recordPayment(memberId: Long, amount: Double) {

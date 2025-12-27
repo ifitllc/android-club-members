@@ -30,7 +30,7 @@ class SettingsViewModel @Inject constructor(
 
     fun syncNow() {
         viewModelScope.launch {
-            runCatching { repo.pullLatest() }
+            runCatching { repo.syncBidirectional() }
                 .onSuccess {
                     _state.value = _state.value.copy(
                         lastSync = formatter.format(Instant.now().atZone(ZoneId.systemDefault())),
