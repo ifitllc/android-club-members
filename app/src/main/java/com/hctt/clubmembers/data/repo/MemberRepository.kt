@@ -50,6 +50,7 @@ class MemberRepository @Inject constructor(
     suspend fun getExpiredPaginated(offset: Int, limit: Int, sortBy: String = "expiration", ascending: Boolean = false): List<Member> {
         val today = LocalDate.now()
         val filtered = dao.getAll()
+            .filter { it.isDeleted.not() }
             .filter { it.expiration?.isBefore(today) == true }
         
         val sorted = when (sortBy) {
@@ -95,9 +96,8 @@ class MemberRepository @Inject constructor(
             val paymentChanged = existing?.paymentAmount != paymentAmount
             val avatarKey = when {
                 avatarInput == null -> existing?.avatarUrl
-                !existing?.avatarUrl.isNullOrBlank() -> existing?.avatarUrl
-                !resolvedUid.isNullOrBlank() -> "$resolvedUid.jpg"
-                else -> "$id.jpg"
+                !existing?.avatarUrl.isNullOrBlank() -> existing?.avatarUrl?.let { ensureAvatarKey(it, resolvedUid) }
+                else -> ensureAvatarKey(avatarFilename ?: "$id.jpg", resolvedUid)
             }
             val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
                 runCatching { uploadAvatar(avatarKey!!, avatarInput) }
@@ -143,7 +143,7 @@ class MemberRepository @Inject constructor(
             val localId = dao.insertAndReturn(baseEntity)
 
             val avatarKey = if (avatarInput != null) {
-                resolvedUid?.let { "$it.jpg" } ?: "$localId.jpg"
+                ensureAvatarKey(avatarFilename ?: "$localId.jpg", resolvedUid)
             } else null
             val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
                 runCatching { uploadAvatar(avatarKey!!, avatarInput) }
@@ -161,11 +161,14 @@ class MemberRepository @Inject constructor(
 
     suspend fun markDeleted(id: Long?) {
         if (id == null) return
-        val now = Instant.now().toEpochMilli()
-        dao.softDelete(id, now)
-        runCatching {
-            membersTable.delete { filter { filter("id", FilterOperator.EQ, id)} }
-        }.onFailure { Log.e(tag, "remote delete failed", it) }
+        val now = Instant.now()
+        dao.softDelete(id, now.toEpochMilli())
+        dao.getById(id)?.let { local ->
+            val deleted = local.copy(isDeleted = true, updatedAt = now)
+            dao.upsert(deleted)
+            runCatching { pushMember(deleted.toDomain()) }
+                .onFailure { Log.e(tag, "remote soft delete failed", it) }
+        }
     }
 
     suspend fun renew(id: Long?, newExpiry: LocalDate) {
@@ -228,7 +231,11 @@ class MemberRepository @Inject constructor(
     }
 
     private suspend fun fetchRemoteMembers(): List<MemberEntity> =
-        membersTable.select()
+        membersTable.select {
+            filter {
+                filter("is_deleted", FilterOperator.EQ, false)
+            }
+        }
             .decodeList<MemberDto>()
             .map { it.toEntity() }
 
@@ -285,6 +292,12 @@ class MemberRepository @Inject constructor(
 
     private suspend fun uploadAvatar(path: String, data: InputStream) =
         storage.from(avatarBucketName).upload(path, data.readBytes(), upsert = true)
+
+    private fun ensureAvatarKey(key: String, uid: String?): String {
+        if (uid.isNullOrBlank()) return key
+        val normalized = key.trimStart('/')
+        return if (normalized.startsWith("$uid/")) normalized else "$uid/$normalized"
+    }
 
     suspend fun getAvatarUrl(path: String): String? =
         runCatching { storage.from(avatarBucketName).createSignedUrl(path, 30.minutes) }.getOrNull()

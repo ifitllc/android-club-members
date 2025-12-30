@@ -19,6 +19,7 @@ import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -104,7 +105,8 @@ fun ExpiredSearchScreen(
                         name = member.name,
                         expires = member.expiresAt ?: strings.expired,
                         avatarUrl = member.avatarUrl,
-                        onDoubleTap = { member.id?.let { onMemberSelected(it) } }
+                        onDoubleTap = { member.id?.let { onMemberSelected(it) } },
+                        onDelete = { member.id?.toLongOrNull()?.let { viewModel.deleteMember(it) } }
                     )
                 }
                 
@@ -148,7 +150,7 @@ private fun SortChip(label: String, selected: Boolean, ascending: Boolean, onCli
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MemberRow(name: String, expires: String, avatarUrl: String?, onDoubleTap: () -> Unit) {
+private fun MemberRow(name: String, expires: String, avatarUrl: String?, onDoubleTap: () -> Unit, onDelete: () -> Unit) {
     val strings = LocalStrings.current
     Card(
         modifier = Modifier
@@ -173,6 +175,9 @@ private fun MemberRow(name: String, expires: String, avatarUrl: String?, onDoubl
                 }
             }
             Spacer(modifier = Modifier.weight(0.01f))
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete member")
+            }
         }
     }
 }

@@ -91,6 +91,14 @@ class MembersViewModel @Inject constructor(
         loadExpiredMembers()
     }
 
+    fun deleteMember(id: Long?) {
+        if (id == null) return
+        viewModelScope.launch {
+            runCatching { repo.markDeleted(id) }
+            loadExpiredMembers()
+        }
+    }
+
     private fun loadExpiredMembers() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoadingExpired = true)

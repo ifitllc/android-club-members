@@ -12,5 +12,6 @@ data class MemberUpsertDto(
     @SerialName("expiration") val expiration: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("updated_at") val updatedAt: String,
-    val uid: String? = null
+    val uid: String? = null,
+    @SerialName("is_deleted") val isDeleted: Boolean = false
 )

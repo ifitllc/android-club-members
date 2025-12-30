@@ -28,7 +28,8 @@ fun MemberDto.toEntity(): MemberEntity = MemberEntity(
     avatarUrl = avatarUrl,
     paymentAmount = null,
     updatedAt = parseInstantFlexible(updatedAt),
-    uid = uid
+    uid = uid,
+    isDeleted = isDeleted
 )
 
 fun MemberEntity.toDomain(): Member = Member(
@@ -40,7 +41,8 @@ fun MemberEntity.toDomain(): Member = Member(
     avatarUrl = avatarUrl,
     paymentAmount = paymentAmount,
     updatedAt = updatedAt,
-    uid = uid
+    uid = uid,
+    isDeleted = isDeleted
 )
 
 fun Member.toDto(): MemberDto = MemberDto(
@@ -51,7 +53,8 @@ fun Member.toDto(): MemberDto = MemberDto(
     expiration = expiration?.let { dateFormatter.format(it) },
     avatarUrl = avatarUrl,
     updatedAt = instantFormatter.format(updatedAt),
-    uid = uid
+    uid = uid,
+    isDeleted = isDeleted
 )
 
 fun Member.toUpsertDto(): MemberUpsertDto = MemberUpsertDto(
@@ -62,5 +65,6 @@ fun Member.toUpsertDto(): MemberUpsertDto = MemberUpsertDto(
     expiration = expiration?.let { dateFormatter.format(it) },
     avatarUrl = avatarUrl,
     updatedAt = instantFormatter.format(updatedAt),
-    uid = uid
+    uid = uid,
+    isDeleted = isDeleted
 )

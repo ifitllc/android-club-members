@@ -2,7 +2,10 @@ package com.hctt.clubmembers.viewmodel
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
+import android.content.ContentResolver
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hctt.clubmembers.data.repo.MemberRepository
@@ -12,9 +15,12 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.net.URL
 
 private val formatter = DateTimeFormatter.ISO_LOCAL_DATE
 
@@ -77,20 +83,37 @@ class EditMemberViewModel @Inject constructor(
         capturedBitmap = bitmap
     }
 
-    fun save(existingId: Long?, photo: Uri?, onDone: () -> Unit) {
+    fun save(existingId: Long?, photo: Uri?, rotationDegrees: Float, onDone: () -> Unit) {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
             val context = getApplication<Application>()
+            val normalizedRotation = ((rotationDegrees % 360f) + 360f) % 360f
             val compressed = when {
-                photo != null -> context.compressImage(photo)
+                photo != null -> context.compressImage(photo, rotationDegrees = normalizedRotation)
                 capturedBitmap != null -> {
-                    // Encode in-memory bitmap to JPEG and compress further if needed
+                    val workingBitmap = capturedBitmap!!.let { bitmap ->
+                        if (normalizedRotation == 0f) bitmap else bitmap.rotate(normalizedRotation)
+                    }
                     val stream = java.io.ByteArrayOutputStream()
-                    capturedBitmap?.compress(Bitmap.CompressFormat.JPEG, 85, stream)
+                    workingBitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
                     java.io.ByteArrayInputStream(stream.toByteArray())
+                }
+                normalizedRotation != 0f && _state.value.avatarUrl != null -> {
+                    val existing = loadExistingAvatarBitmap(context.contentResolver, _state.value.avatarUrl!!)
+                    existing?.let { bitmap ->
+                        val rotated = bitmap.rotate(normalizedRotation)
+                        val stream = java.io.ByteArrayOutputStream()
+                        rotated.compress(Bitmap.CompressFormat.JPEG, 85, stream)
+                        java.io.ByteArrayInputStream(stream.toByteArray())
+                    }
                 }
                 else -> null
             }
+            if (normalizedRotation != 0f && photo == null && capturedBitmap == null && _state.value.avatarUrl != null && compressed == null) {
+                _state.value = _state.value.copy(loading = false, error = "Unable to load existing photo for rotation")
+                return@launch
+            }
+
             val expirationDate = _state.value.expiresAt.takeIf { it.isNotBlank() }?.let {
                 LocalDate.parse(it, formatter)
             }
@@ -116,5 +139,28 @@ class EditMemberViewModel @Inject constructor(
         if (raw.isBlank()) return null
         val cleaned = raw.replace("[^\\d.,-]".toRegex(), "").replace(',', '.')
         return cleaned.toDoubleOrNull()
+    }
+
+    private fun Bitmap.rotate(degrees: Float): Bitmap {
+        val matrix = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+    }
+
+    private suspend fun loadExistingAvatarBitmap(resolver: ContentResolver, url: String): Bitmap? = withContext(Dispatchers.IO) {
+        val uri = runCatching { Uri.parse(url) }.getOrNull()
+
+        val httpStream = when {
+            uri?.scheme == ContentResolver.SCHEME_CONTENT || uri?.scheme == ContentResolver.SCHEME_FILE ->
+                runCatching { resolver.openInputStream(uri!!) }.getOrNull()
+            uri?.scheme == "http" || uri?.scheme == "https" ->
+                runCatching { URL(url).openStream() }.getOrNull()
+            // Possibly a storage path (not signed); request a new signed URL then fetch.
+            !url.contains("://") -> repo.getAvatarUrl(url)?.let { signed ->
+                runCatching { URL(signed).openStream() }.getOrNull()
+            }
+            else -> null
+        }
+
+        httpStream?.use { BitmapFactory.decodeStream(it) }
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -64,6 +65,7 @@ fun EditMemberScreen(
     val state by viewModel.state.collectAsState()
     val strings = LocalStrings.current
     val photoUri = remember { mutableStateOf<Uri?>(null) }
+    val rotation = remember { mutableStateOf(0f) }
     val context = LocalContext.current
     val dateFormatter = remember { DateTimeFormatter.ISO_LOCAL_DATE }
 
@@ -83,6 +85,7 @@ fun EditMemberScreen(
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         photoUri.value = uri
+        rotation.value = 0f
     }
 
     val cropLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -90,6 +93,7 @@ fun EditMemberScreen(
             val output = result.data?.let { UCrop.getOutput(it) }
             if (output != null) {
                 photoUri.value = output
+                rotation.value = 0f
             }
         }
     }
@@ -137,7 +141,16 @@ fun EditMemberScreen(
                 modifier = Modifier
                     .size(120.dp)
                     .clip(MaterialTheme.shapes.medium)
+                    .graphicsLayer { rotationZ = rotation.value }
             )
+
+            if (state.error != null) {
+                Text(
+                    state.error ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
 
             OutlinedTextField(
                 value = state.name,
@@ -197,6 +210,11 @@ fun EditMemberScreen(
                     },
                     modifier = Modifier.weight(1f)
                 ) { Text(strings.takePhoto) }
+                OutlinedButton(
+                    onClick = { rotation.value = (rotation.value + 90f) % 360f },
+                    enabled = photoUri.value != null || state.avatarUrl != null,
+                    modifier = Modifier.weight(1f)
+                ) { Text(strings.rotatePhoto) }
             }
 
             Row(
@@ -206,7 +224,7 @@ fun EditMemberScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
-                    onClick = { viewModel.save(memberId?.toLongOrNull(), photoUri.value, onBack) },
+                    onClick = { viewModel.save(memberId?.toLongOrNull(), photoUri.value, rotation.value, onBack) },
                     modifier = Modifier.weight(1f)
                 ) { Text(strings.save) }
                 OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text(strings.cancel) }
