@@ -91,6 +91,8 @@ class MemberRepository @Inject constructor(
         val resolvedUid = uid ?: supabase.client.auth.currentSessionOrNull()?.user?.id
         if (id != null) {
             val existing = dao.getById(id)
+            val expirationChanged = existing?.expiration != expiration
+            val paymentChanged = existing?.paymentAmount != paymentAmount
             val avatarKey = when {
                 avatarInput == null -> existing?.avatarUrl
                 !existing?.avatarUrl.isNullOrBlank() -> existing?.avatarUrl
@@ -116,7 +118,13 @@ class MemberRepository @Inject constructor(
             )
             dao.upsert(entity)
             pushMember(entity.toDomain())
-            paymentAmount?.let { recordPayment(id, it) }
+            if (paymentAmount != null) {
+                if (expirationChanged) {
+                    recordPayment(id, paymentAmount)
+                } else if (paymentChanged) {
+                    updateLatestPayment(id, paymentAmount)
+                }
+            }
             return entity.toDomain()
         } else {
             // Create locally first to obtain an id for consistent avatar naming
@@ -260,6 +268,19 @@ class MemberRepository @Inject constructor(
         val dto = PaymentDto(id = null, createdAt = now, amount = amount, memberId = memberId)
         runCatching { paymentsTable.insert(dto) }
             .onFailure { Log.e(tag, "payment insert failed", it) }
+    }
+
+    private suspend fun updateLatestPayment(memberId: Long, amount: Double) {
+        val latest = getPayments(memberId).firstOrNull() ?: return
+        val latestId = latest.id ?: return
+        val dto = PaymentDto(
+            id = latestId,
+            createdAt = latest.createdAt.toString(),
+            amount = amount,
+            memberId = memberId
+        )
+        runCatching { paymentsTable.upsert(dto, onConflict = "id") }
+            .onFailure { Log.e(tag, "payment update failed", it) }
     }
 
     private suspend fun uploadAvatar(path: String, data: InputStream) =
