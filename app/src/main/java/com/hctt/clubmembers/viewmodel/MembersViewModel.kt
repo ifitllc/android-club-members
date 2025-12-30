@@ -25,10 +25,17 @@ data class MemberUi(val id: String?, val name: String, val expiresAt: String?, v
 
 data class MembersState(
     val activeMembers: List<MemberUi> = emptyList(),
+    val expiredMembers: List<MemberUi> = emptyList(),
     val expiredResults: List<MemberUi> = emptyList(),
     val search: String = "",
     val sort: SortField = SortField.EXPIRATION,
-    val ascending: Boolean = false
+    val ascending: Boolean = false,
+    val expiredSort: SortField = SortField.EXPIRATION,
+    val expiredAscending: Boolean = false,
+    val expiredPage: Int = 0,
+    val expiredPageSize: Int = 20,
+    val hasMoreExpired: Boolean = true,
+    val isLoadingExpired: Boolean = false
 )
 
 enum class SortField { NAME, CREATED, EXPIRATION }
@@ -51,6 +58,9 @@ class MembersViewModel @Inject constructor(
 
         // Pull fresh data on startup so the list isn't empty when local cache is cold.
         viewModelScope.launch { runCatching { repo.pullLatest() } }
+        
+        // Load first page of expired members
+        loadExpiredMembers()
     }
 
     fun onSearchChange(value: String) {
@@ -75,6 +85,71 @@ class MembersViewModel @Inject constructor(
         _state.value = _state.value.copy(activeMembers = sort(_state.value.activeMembers))
     }
 
+    fun onExpiredSortSelected(field: SortField) {
+        val ascending = if (_state.value.expiredSort == field) !_state.value.expiredAscending else true
+        _state.value = _state.value.copy(expiredSort = field, expiredAscending = ascending)
+        loadExpiredMembers()
+    }
+
+    private fun loadExpiredMembers() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoadingExpired = true)
+            try {
+                val sortBy = when (_state.value.expiredSort) {
+                    SortField.NAME -> "name"
+                    SortField.CREATED -> "created"
+                    SortField.EXPIRATION -> "expiration"
+                }
+                val members = repo.getExpiredPaginated(
+                    offset = 0,
+                    limit = _state.value.expiredPageSize,
+                    sortBy = sortBy,
+                    ascending = _state.value.expiredAscending
+                )
+                _state.value = _state.value.copy(
+                    expiredMembers = members.map { it.toUi() },
+                    expiredPage = 0,
+                    hasMoreExpired = members.size >= _state.value.expiredPageSize,
+                    isLoadingExpired = false
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isLoadingExpired = false)
+            }
+        }
+    }
+
+    fun loadMoreExpired() {
+        if (_state.value.isLoadingExpired || !_state.value.hasMoreExpired) return
+        
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoadingExpired = true)
+            try {
+                val nextPage = _state.value.expiredPage + 1
+                val offset = nextPage * _state.value.expiredPageSize
+                val sortBy = when (_state.value.expiredSort) {
+                    SortField.NAME -> "name"
+                    SortField.CREATED -> "created"
+                    SortField.EXPIRATION -> "expiration"
+                }
+                val newMembers = repo.getExpiredPaginated(
+                    offset = offset,
+                    limit = _state.value.expiredPageSize,
+                    sortBy = sortBy,
+                    ascending = _state.value.expiredAscending
+                )
+                
+                _state.value = _state.value.copy(
+                    expiredMembers = _state.value.expiredMembers + newMembers.map { it.toUi() },
+                    expiredPage = nextPage,
+                    hasMoreExpired = newMembers.size >= _state.value.expiredPageSize,
+                    isLoadingExpired = false
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isLoadingExpired = false)
+            }
+        }
+    }
+
     private fun sort(list: List<MemberUi>): List<MemberUi> {
         val sorted = when (_state.value.sort) {
             SortField.NAME -> list.sortedBy { it.name.lowercase() }
@@ -82,6 +157,15 @@ class MembersViewModel @Inject constructor(
             SortField.EXPIRATION -> list.sortedBy { it.expiresAt ?: "9999-12-31" }
         }
         return if (_state.value.ascending) sorted else sorted.reversed()
+    }
+
+    private fun sortExpired(list: List<MemberUi>): List<MemberUi> {
+        val sorted = when (_state.value.expiredSort) {
+            SortField.NAME -> list.sortedBy { it.name.lowercase() }
+            SortField.CREATED -> list.sortedBy { it.id?.toLongOrNull() ?: Long.MAX_VALUE }
+            SortField.EXPIRATION -> list.sortedBy { it.expiresAt ?: "9999-12-31" }
+        }
+        return if (_state.value.expiredAscending) sorted else sorted.reversed()
     }
 }
 

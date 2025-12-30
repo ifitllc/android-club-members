@@ -41,6 +41,31 @@ class MemberRepository @Inject constructor(
             .map { it.toDomain() }
     }
 
+    fun observeExpired(): Flow<List<Member>> = dao.observeActive().map { list ->
+        val today = LocalDate.now()
+        list.filter { it.expiration?.isBefore(today) == true }
+            .map { it.toDomain() }
+    }
+
+    suspend fun getExpiredPaginated(offset: Int, limit: Int, sortBy: String = "expiration", ascending: Boolean = false): List<Member> {
+        val today = LocalDate.now()
+        val filtered = dao.getAll()
+            .filter { it.expiration?.isBefore(today) == true }
+        
+        val sorted = when (sortBy) {
+            "name" -> filtered.sortedBy { it.name.lowercase() }
+            "created" -> filtered.sortedBy { it.id }
+            else -> filtered.sortedBy { it.expiration }
+        }
+        
+        val ordered = if (ascending) sorted else sorted.reversed()
+        
+        return ordered
+            .drop(offset)
+            .take(limit)
+            .map { it.toDomain() }
+    }
+
     fun searchExpired(term: String): Flow<List<Member>> =
         dao.search("%$term%").map { list ->
             val today = LocalDate.now()
