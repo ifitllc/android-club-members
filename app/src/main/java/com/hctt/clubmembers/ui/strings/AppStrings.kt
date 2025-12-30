@@ -48,7 +48,10 @@ data class AppStrings(
     val settingsTitle: String,
     val offlineCache: (String) -> String,
     val lastSync: (String?) -> String,
-    val syncNow: String
+    val locallyModified: (Int) -> String,
+    val syncNow: String,
+    val loadMore: String,
+    val loading: String
 )
 
 private val englishStrings = AppStrings(
@@ -87,7 +90,10 @@ private val englishStrings = AppStrings(
     settingsTitle = "Settings",
     offlineCache = { cache -> "Offline cache: $cache" },
     lastSync = { last -> "Last sync: ${last ?: "Never"}" },
+    locallyModified = { count -> "Locally modified: $count" },
     syncNow = "Sync now",
+    loadMore = "Load More",
+    loading = "Loading ...",
     sortName = "Name",
     sortCreated = "Created",
     sortExpiration = "Expiration"
@@ -129,7 +135,10 @@ private val chineseStrings = AppStrings(
     settingsTitle = "设置",
     offlineCache = { cache -> "离线缓存: $cache" },
     lastSync = { last -> "上次同步: ${last ?: "从未"}" },
+    locallyModified = { count -> "本地已修改: $count" },
     syncNow = "立即同步",
+    loadMore = "加载更多",
+    loading = "加载中...",
     sortName = "姓名",
     sortCreated = "创建时间",
     sortExpiration = "到期日"

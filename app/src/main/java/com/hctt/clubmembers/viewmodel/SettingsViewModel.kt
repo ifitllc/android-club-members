@@ -14,10 +14,10 @@ import java.time.format.DateTimeFormatter
 
 private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
-
 data class SettingsState(
     val cacheState: String = "Local DB ready",
     val lastSync: String? = null,
+    val locallyModifiedCount: Int = 0,
     val error: String? = null
 )
 
@@ -28,6 +28,10 @@ class SettingsViewModel @Inject constructor(
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state
 
+    init {
+        updateLocallyModifiedCount()
+    }
+
     fun syncNow() {
         viewModelScope.launch {
             runCatching { repo.syncBidirectional() }
@@ -36,8 +40,16 @@ class SettingsViewModel @Inject constructor(
                         lastSync = formatter.format(Instant.now().atZone(ZoneId.systemDefault())),
                         error = null
                     )
+                    updateLocallyModifiedCount()
                 }
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
+
+    private fun updateLocallyModifiedCount() {
+        viewModelScope.launch {
+            val count = repo.getLocallyModifiedCount()
+            _state.value = _state.value.copy(locallyModifiedCount = count)
         }
     }
 }

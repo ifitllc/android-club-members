@@ -30,6 +30,7 @@ fun SettingsScreen(
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Text(strings.offlineCache(state.cacheState))
             Text(strings.lastSync(state.lastSync), modifier = Modifier.padding(top = 4.dp))
+            Text(strings.locallyModified(state.locallyModifiedCount), modifier = Modifier.padding(top = 4.dp))
             Button(onClick = viewModel::syncNow, modifier = Modifier.padding(top = 16.dp)) {
                 Text(strings.syncNow)
             }

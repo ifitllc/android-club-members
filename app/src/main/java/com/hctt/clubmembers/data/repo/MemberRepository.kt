@@ -94,8 +94,8 @@ class MemberRepository @Inject constructor(
             val avatarKey = when {
                 avatarInput == null -> existing?.avatarUrl
                 !existing?.avatarUrl.isNullOrBlank() -> existing?.avatarUrl
-                !resolvedUid.isNullOrBlank() -> "${resolvedUid}.jpg"
-                else -> "${id}.jpg"
+                !resolvedUid.isNullOrBlank() -> "$resolvedUid.jpg"
+                else -> "$id.jpg"
             }
             val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
                 runCatching { uploadAvatar(avatarKey!!, avatarInput) }
@@ -135,7 +135,7 @@ class MemberRepository @Inject constructor(
             val localId = dao.insertAndReturn(baseEntity)
 
             val avatarKey = if (avatarInput != null) {
-                resolvedUid?.let { "${it}.jpg" } ?: "${localId}.jpg"
+                resolvedUid?.let { "$it.jpg" } ?: "$localId.jpg"
             } else null
             val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
                 runCatching { uploadAvatar(avatarKey!!, avatarInput) }
@@ -174,6 +174,21 @@ class MemberRepository @Inject constructor(
             .map { it.toPaymentDomain() }
             .sortedByDescending { it.createdAt }
     }.getOrDefault(emptyList())
+
+    suspend fun getLocallyModifiedCount(): Int {
+        return try {
+            val remote = fetchRemoteMembers()
+            val remoteById = remote.associateBy { it.id }
+            val local = dao.getAll()
+            local.count { localMember ->
+                val remoteMember = remoteById[localMember.id]
+                remoteMember == null || localMember.updatedAt.isAfter(remoteMember.updatedAt)
+            }
+        } catch (t: Throwable) {
+            Log.e(tag, "getLocallyModifiedCount failed", t)
+            0
+        }
+    }
 
     suspend fun pullLatest() {
         runCatching { mergeRemoteIntoLocal(fetchRemoteMembers()) }
