@@ -89,7 +89,8 @@ class MemberRepository @Inject constructor(
     ): Member {
         val now = Instant.now()
         val id = existingId
-        val resolvedUid = uid ?: supabase.client.auth.currentSessionOrNull()?.user?.id
+        // Do not force current user ID as member UID, as that violates unique constraint for multiple members
+        val resolvedUid = uid
         if (id != null) {
             val existing = dao.getById(id)
             val expirationChanged = existing?.expiration != expiration
@@ -261,13 +262,8 @@ class MemberRepository @Inject constructor(
     }
 
     private suspend fun pushMember(member: Member) {
-        // Ensure we always include the current uid to satisfy RLS policies on Supabase.
-        val uid = member.uid ?: supabase.client.auth.currentSessionOrNull()?.user?.id
-            ?: error("No auth user available for push")
-        val withUid = member.copy(uid = uid)
-
         // Explicitly upsert on id so updates (e.g., expiration changes) are applied remotely.
-        membersTable.upsert(withUid.toUpsertDto(), onConflict = "id")
+        membersTable.upsert(member.toUpsertDto(), onConflict = "id")
     }
 
     private suspend fun recordPayment(memberId: Long, amount: Double) {
