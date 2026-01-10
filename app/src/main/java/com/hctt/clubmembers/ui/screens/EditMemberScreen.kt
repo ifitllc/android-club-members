@@ -133,13 +133,13 @@ fun EditMemberScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.Start
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             AsyncImage(
                 model = photoUri.value ?: state.avatarUrl,
                 contentDescription = strings.avatar,
                 modifier = Modifier
-                    .size(120.dp)
+                    .size(200.dp)
                     .clip(MaterialTheme.shapes.medium)
                     .graphicsLayer { rotationZ = rotation.value }
             )
