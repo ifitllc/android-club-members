@@ -20,6 +20,7 @@ import com.hctt.clubmembers.ui.screens.EditMemberScreen
 import com.hctt.clubmembers.ui.screens.ExpiredSearchScreen
 import com.hctt.clubmembers.ui.screens.ListScreen
 import com.hctt.clubmembers.ui.screens.LoginScreen
+import com.hctt.clubmembers.ui.screens.SendEmailScreen
 import com.hctt.clubmembers.ui.screens.SettingsScreen
 import com.hctt.clubmembers.ui.theme.ClubMembersTheme
 import com.hctt.clubmembers.ui.strings.AppLanguage
@@ -63,6 +64,7 @@ sealed class Screen(val route: String) {
     data object Settings : Screen("settings")
     data object AddMember : Screen("add")
     data object ExpiredSearch : Screen("expired")
+    data object SendEmail : Screen("send_email")
 }
 
 @Composable
@@ -88,6 +90,7 @@ fun AppNavigation(supabase: SupabaseClientProvider) {
                     onOpenSettings = { navController.navigate(Screen.Settings.route) },
                     onOpenExpired = { navController.navigate(Screen.ExpiredSearch.route) },
                     onToggleLanguage = { language = language.toggle() },
+                    onSendEmail = { navController.navigate(Screen.SendEmail.route) },
                     currentLanguage = language
                 )
             }
@@ -106,6 +109,9 @@ fun AppNavigation(supabase: SupabaseClientProvider) {
                     onBack = { navController.popBackStack() },
                     onMemberSelected = { navController.navigate(Screen.EditMember.route(it)) }
                 )
+            }
+            composable(Screen.SendEmail.route) {
+                SendEmailScreen(onBack = { navController.popBackStack() })
             }
         }
     }

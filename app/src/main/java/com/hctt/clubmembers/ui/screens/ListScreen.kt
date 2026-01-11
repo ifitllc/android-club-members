@@ -46,8 +46,11 @@ import com.hctt.clubmembers.ui.strings.AppLanguage
 import com.hctt.clubmembers.viewmodel.MembersViewModel
 import com.hctt.clubmembers.viewmodel.SortField
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.Icons
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+
 @Composable
 fun ListScreen(
     onMemberSelected: (String) -> Unit,
@@ -55,6 +58,7 @@ fun ListScreen(
     onOpenSettings: () -> Unit,
     onOpenExpired: () -> Unit,
     onToggleLanguage: () -> Unit,
+    onSendEmail: () -> Unit,
     currentLanguage: AppLanguage,
     viewModel: MembersViewModel = hiltViewModel()
 ) {
@@ -73,6 +77,9 @@ fun ListScreen(
     Box(modifier = Modifier.fillMaxSize().pullRefresh(pullRefreshState)) {
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(title = { Text(strings.membersTitle(state.activeMembers.size)) }, actions = {
+                IconButton(onClick = onSendEmail) {
+                    Icon(Icons.Default.Email, contentDescription = "Send Email")
+                }
                 IconButton(onClick = onOpenSettings) {
                     Icon(viewModel.settingsIcon, contentDescription = strings.settings)
                 }

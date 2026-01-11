@@ -63,6 +63,14 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        resources.excludes += "META-INF/NOTICE.md"
+        resources.excludes += "META-INF/LICENSE.md"
+        resources.excludes += "META-INF/DEPENDENCIES"
+        resources.excludes += "META-INF/LICENSE.txt"
+        resources.excludes += "META-INF/NOTICE.txt"
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -84,6 +92,14 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // ML Kit Translation
+    implementation("com.google.mlkit:translate:17.0.3")
+
+    // JavaMail
+    implementation("com.sun.mail:android-mail:1.6.7")
+    implementation("com.sun.mail:android-activation:1.6.7")
 
     // Hilt
     implementation("com.google.dagger:hilt-android:2.52")
