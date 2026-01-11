@@ -45,7 +45,12 @@ class EmailSender @Inject constructor() {
                 setFrom(InternetAddress(senderEmail))
                 if (toReceiver != null) {
                     setRecipient(Message.RecipientType.TO, InternetAddress(toReceiver))
+                } else if (bccList.isNotEmpty()) {
+                     // If sending to BCC list without a specific TO receiver, set sender as TO
+                     // to avoid "Undisclosed recipients" and ensure sender gets a copy.
+                    setRecipient(Message.RecipientType.TO, InternetAddress(senderEmail))
                 }
+                
                 if (bccList.isNotEmpty()) {
                     setRecipients(
                         Message.RecipientType.BCC,

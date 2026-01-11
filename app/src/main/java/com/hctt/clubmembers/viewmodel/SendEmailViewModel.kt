@@ -21,7 +21,7 @@ data class SendEmailState(
     val error: String? = null,
     val successMessage: String? = null,
     val showTestEmailDialog: Boolean = false,
-    val testEmailAddress: String = "fan@hctt-md.com"
+    val testEmailAddress: String = "info@funplaysports-md.com"
 )
 
 @HiltViewModel

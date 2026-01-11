@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.hctt.clubmembers.ui.strings.LocalStrings
 import com.hctt.clubmembers.viewmodel.SendEmailViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -19,6 +20,7 @@ fun SendEmailScreen(
     viewModel: SendEmailViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val strings = LocalStrings.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollState = rememberScrollState()
 
@@ -39,10 +41,10 @@ fun SendEmailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Send Email to Active Members") },
+                title = { Text(strings.sendEmailTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = strings.back)
                     }
                 }
             )
@@ -60,14 +62,14 @@ fun SendEmailScreen(
             OutlinedTextField(
                 value = state.subject,
                 onValueChange = viewModel::updateSubject,
-                label = { Text("Subject") },
+                label = { Text(strings.subject) },
                 modifier = Modifier.fillMaxWidth()
             )
 
             OutlinedTextField(
                 value = state.body,
                 onValueChange = viewModel::updateBody,
-                label = { Text("Content") },
+                label = { Text(strings.content) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(300.dp), 
@@ -84,7 +86,7 @@ fun SendEmailScreen(
                     enabled = !state.isLoading,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Translate (CN->EN)")
+                    Text(strings.translateButton)
                 }
 
                 Button(
@@ -92,7 +94,7 @@ fun SendEmailScreen(
                     enabled = !state.isLoading,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Send All")
+                    Text(strings.sendAll)
                 }
             }
             
@@ -101,7 +103,7 @@ fun SendEmailScreen(
                 enabled = !state.isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Send Test Email")
+                Text(strings.sendTestEmail)
             }
             
             if (state.isLoading) {
@@ -111,10 +113,10 @@ fun SendEmailScreen(
             if (state.showTestEmailDialog) {
                 AlertDialog(
                     onDismissRequest = { viewModel.showTestEmailDialog(false) },
-                    title = { Text("Send Test Email") },
+                    title = { Text(strings.sendTestEmail) },
                     text = {
                         Column {
-                            Text("Enter email address for test:")
+                            Text(strings.enterTestEmail)
                             OutlinedTextField(
                                 value = state.testEmailAddress,
                                 onValueChange = viewModel::updateTestEmailAddress,
@@ -123,10 +125,10 @@ fun SendEmailScreen(
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = viewModel::sendTestEmail) { Text("Send") }
+                        TextButton(onClick = viewModel::sendTestEmail) { Text(strings.send) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { viewModel.showTestEmailDialog(false) }) { Text("Cancel") }
+                        TextButton(onClick = { viewModel.showTestEmailDialog(false) }) { Text(strings.cancel) }
                     }
                 )
             }

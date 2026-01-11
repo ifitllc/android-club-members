@@ -52,7 +52,21 @@ data class AppStrings(
     val locallyModified: (Int) -> String,
     val syncNow: String,
     val loadMore: String,
-    val loading: String
+    val loading: String,
+    val emailConfiguration: String,
+    val gmailAddress: String,
+    val appPasswordApiKey: String,
+    val hidePassword: String,
+    val showPassword: String,
+    val saveEmailConfig: String,
+    val sendEmailTitle: String,
+    val subject: String,
+    val content: String,
+    val translateButton: String,
+    val sendAll: String,
+    val sendTestEmail: String,
+    val enterTestEmail: String,
+    val send: String
 )
 
 private val englishStrings = AppStrings(
@@ -98,7 +112,21 @@ private val englishStrings = AppStrings(
     loading = "Loading ...",
     sortName = "Name",
     sortCreated = "Created",
-    sortExpiration = "Expiration"
+    sortExpiration = "Expiration",
+    emailConfiguration = "Email Configuration",
+    gmailAddress = "Gmail Address",
+    appPasswordApiKey = "App Password / API Key",
+    hidePassword = "Hide password",
+    showPassword = "Show password",
+    saveEmailConfig = "Save Email Config",
+    sendEmailTitle = "Send Email to Active Members",
+    subject = "Subject",
+    content = "Content",
+    translateButton = "Translate (CN->EN)",
+    sendAll = "Send All",
+    sendTestEmail = "Send Test Email",
+    enterTestEmail = "Enter email address for test:",
+    send = "Send"
 )
 
 private val chineseStrings = AppStrings(
@@ -144,7 +172,21 @@ private val chineseStrings = AppStrings(
     loading = "加载中...",
     sortName = "姓名",
     sortCreated = "创建时间",
-    sortExpiration = "到期日"
+    sortExpiration = "到期日",
+    emailConfiguration = "邮件配置",
+    gmailAddress = "Gmail 邮箱地址",
+    appPasswordApiKey = "应用密码 / API 密钥",
+    hidePassword = "隐藏密码",
+    showPassword = "显示密码",
+    saveEmailConfig = "保存邮件配置",
+    sendEmailTitle = "群发邮件",
+    subject = "主题",
+    content = "内容",
+    translateButton = "翻译 (中->英)",
+    sendAll = "群发所有人",
+    sendTestEmail = "发送测试邮件",
+    enterTestEmail = "输入测试邮箱地址:",
+    send = "发送"
 )
 
 val LocalStrings = staticCompositionLocalOf { chineseStrings }

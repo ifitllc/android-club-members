@@ -61,7 +61,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
             Divider()
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Email Configuration", style = MaterialTheme.typography.titleMedium)
+            Text(strings.emailConfiguration, style = MaterialTheme.typography.titleMedium)
             
             var email by remember(state.gmailAddress) { mutableStateOf(state.gmailAddress) }
             var apiKey by remember(state.gmailApiKey) { mutableStateOf(state.gmailApiKey) }
@@ -70,13 +70,13 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Gmail Address") },
+                label = { Text(strings.gmailAddress) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             )
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it },
-                label = { Text("App Password / API Key") },
+                label = { Text(strings.appPasswordApiKey) },
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     val image = if (passwordVisible)
@@ -84,7 +84,7 @@ fun SettingsScreen(
                     else
                         Icons.Filled.VisibilityOff
 
-                    val description = if (passwordVisible) "Hide password" else "Show password"
+                    val description = if (passwordVisible) strings.hidePassword else strings.showPassword
 
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(imageVector = image, description)
@@ -96,7 +96,7 @@ fun SettingsScreen(
                 onClick = { viewModel.saveEmailConfig(email, apiKey) },
                 modifier = Modifier.padding(top = 8.dp)
             ) {
-                Text("Save Email Config")
+                Text(strings.saveEmailConfig)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
