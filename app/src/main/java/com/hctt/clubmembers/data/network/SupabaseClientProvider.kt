@@ -18,6 +18,8 @@ import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import android.util.Log
+
 @Singleton
 class SupabaseClientProvider @Inject constructor(
     @ApplicationContext private val context: Context
@@ -32,13 +34,20 @@ class SupabaseClientProvider @Inject constructor(
                     ignoreUnknownKeys = true
                     isLenient = true
                     coerceInputValues = true
+                    encodeDefaults = true
                 }
             )
             install(Postgrest)
             install(Storage)
             install(Auth) {
                 alwaysAutoRefresh = true
+                autoSaveToStorage = true
+                flowType = io.github.jan.supabase.gotrue.FlowType.IMPLICIT
+                scheme = "com.hctt.clubmembers"
+                host = "auth-callback"
                 sessionManager = SharedPrefsSessionManager(context)
+                // Add debug logger for auth
+                // debug = true  <-- Removed invalid property
             }
             httpEngine = OkHttp.create()
         }
@@ -47,22 +56,32 @@ class SupabaseClientProvider @Inject constructor(
 
 private class SharedPrefsSessionManager(context: Context) : SessionManager {
     private val prefs = context.getSharedPreferences("supabase_session", Context.MODE_PRIVATE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        isLenient = true
+        coerceInputValues = true
+        encodeDefaults = true
+    }
 
     override suspend fun saveSession(session: UserSession) {
-        prefs.edit().putString("session", json.encodeToString(session)).apply()
+        Log.d("SupabaseSession", "Saving session")
+        val jsonStr = json.encodeToString(session)
+        prefs.edit().putString("session", jsonStr).apply()
     }
 
     override suspend fun loadSession(): UserSession? {
-        val sessionStr = prefs.getString("session", null) ?: return null
+        Log.d("SupabaseSession", "Loading session")
+        val sessionStr = prefs.getString("session", null) ?: return null.also { Log.d("SupabaseSession", "No session found in prefs") }
         return try {
-            json.decodeFromString<UserSession>(sessionStr)
+            json.decodeFromString<UserSession>(sessionStr).also { Log.d("SupabaseSession", "Session loaded successfully") }
         } catch (e: Exception) {
+            Log.e("SupabaseSession", "Failed to decode session", e)
             null
         }
     }
 
     override suspend fun deleteSession() {
+        Log.d("SupabaseSession", "Deleting session")
         prefs.edit().remove("session").apply()
     }
 }

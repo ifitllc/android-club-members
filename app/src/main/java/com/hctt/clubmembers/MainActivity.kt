@@ -1,5 +1,6 @@
 package com.hctt.clubmembers
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,6 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.CircularProgressIndicator
 import com.hctt.clubmembers.ui.screens.EditMemberScreen
 import com.hctt.clubmembers.ui.screens.ExpiredSearchScreen
 import com.hctt.clubmembers.ui.screens.ListScreen
@@ -30,32 +36,56 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import io.github.jan.supabase.gotrue.handleDeeplinks
 import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.gotrue.SessionStatus
+
+import android.util.Log
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var supabase: SupabaseClientProvider
 
+    private var intentHolder by mutableStateOf<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        intentHolder = intent
+
         setContent {
+            val currentIntent = intentHolder
+            LaunchedEffect(currentIntent) {
+                if (currentIntent != null) {
+                    val data = currentIntent.data
+                    Log.d("MainActivity", "Handling deep link intent: $data")
+                    if (data != null && data.toString().contains("access_token")) {
+                        try {
+                            supabase.client.handleDeeplinks(currentIntent) {
+                                Log.d("MainActivity", "Deep link processed successfully. User: ${it.user?.email}")
+                            }
+                        } catch(e: Exception) {
+                            Log.e("MainActivity", "Error handling handling deep link", e)
+                        }
+                    }
+                }
+            }
+
             ClubMembersTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppNavigation(supabase)
+                    val isDeepLink = currentIntent?.data?.toString()?.contains("access_token") == true
+                    Log.d("MainActivity", "isDeepLink=$isDeepLink, intent data: ${currentIntent?.data}")
+                    AppNavigation(supabase, isDeepLink)
                 }
             }
         }
-        supabase.client.handleDeeplinks(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent?) {
         super.onNewIntent(intent)
-        if (intent != null) {
-            supabase.client.handleDeeplinks(intent)
-        }
+        intentHolder = intent
     }
 }
 
 sealed class Screen(val route: String) {
+    data object Loading : Screen("loading")
     data object Login : Screen("login")
     data object Members : Screen("members")
     data object EditMember : Screen("edit/{memberId}") {
@@ -68,15 +98,60 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun AppNavigation(supabase: SupabaseClientProvider) {
+fun AppNavigation(supabase: SupabaseClientProvider, isDeepLink: Boolean) {
     var language by rememberSaveable { mutableStateOf(AppLanguage.ZH) }
     ProvideStrings(language) {
         val navController = rememberNavController()
-        val startDestination = remember {
-            if (supabase.client.auth.currentSessionOrNull() != null) Screen.Members.route else Screen.Login.route
-        }
-        NavHost(navController = navController, startDestination = startDestination) {
+        NavHost(navController = navController, startDestination = Screen.Loading.route) {
+            composable(Screen.Loading.route) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                val sessionStatus by supabase.client.auth.sessionStatus.collectAsState()
+                
+                // If it's a deep link, we give it some time to process before deciding to go to Login.
+                // We don't want to race effectively against the handleDeeplinks call.
+                var deepLinkTimeoutPassed by remember { mutableStateOf(!isDeepLink) }
+                
+                if (isDeepLink && !deepLinkTimeoutPassed) {
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(2000) // Wait up to 2 seconds for deep link processing
+                        deepLinkTimeoutPassed = true
+                    }
+                }
+
+                LaunchedEffect(sessionStatus, deepLinkTimeoutPassed) {
+                    Log.d("MainActivity", "LoadingScreen status=$sessionStatus, deepLinkTimeoutPassed=$deepLinkTimeoutPassed")
+                    when (sessionStatus) {
+                        is SessionStatus.Authenticated -> {
+                            Log.d("MainActivity", "Authenticated -> Navigate to Members")
+                            navController.navigate(Screen.Members.route) {
+                                popUpTo(Screen.Loading.route) { inclusive = true }
+                            }
+                        }
+                        is SessionStatus.NotAuthenticated -> {
+                            // Only navigate to login if we are not waiting for a deep link, or if timeout passed
+                            if (deepLinkTimeoutPassed) {
+                                Log.d("MainActivity", "NotAuthenticated -> Navigate to Login")
+                                navController.navigate(Screen.Login.route) {
+                                    popUpTo(Screen.Loading.route) { inclusive = true }
+                                }
+                            }
+                        }
+                        else -> Unit
+                    }
+                }
+            }
             composable(Screen.Login.route) {
+                // Monitor session status in case of deep link login
+                val sessionStatus by supabase.client.auth.sessionStatus.collectAsState()
+                LaunchedEffect(sessionStatus) {
+                    if (sessionStatus is SessionStatus.Authenticated) {
+                        navController.navigate(Screen.Members.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                        }
+                    }
+                }
                 LoginScreen(onLoggedIn = {
                     navController.navigate(Screen.Members.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }

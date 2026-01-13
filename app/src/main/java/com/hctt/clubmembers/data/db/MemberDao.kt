@@ -24,6 +24,9 @@ interface MemberDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(member: MemberEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(members: List<MemberEntity>)
+
     @Insert
     suspend fun insertAndReturn(member: MemberEntity): Long
 

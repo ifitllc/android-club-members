@@ -50,7 +50,6 @@ class MemberRepository @Inject constructor(
     suspend fun getExpiredPaginated(offset: Int, limit: Int, sortBy: String = "expiration", ascending: Boolean = false): List<Member> {
         val today = LocalDate.now()
         val filtered = dao.getAll()
-            .filter { it.isDeleted.not() }
             .filter { it.expiration?.isBefore(today) == true }
         
         val sorted = when (sortBy) {
@@ -89,16 +88,17 @@ class MemberRepository @Inject constructor(
     ): Member {
         val now = Instant.now()
         val id = existingId
-        // Do not force current user ID as member UID, as that violates unique constraint for multiple members
-        val resolvedUid = uid
+        val resolvedUid = uid ?: supabase.client.auth.currentSessionOrNull()?.user?.id
         if (id != null) {
             val existing = dao.getById(id)
             val expirationChanged = existing?.expiration != expiration
             val paymentChanged = existing?.paymentAmount != paymentAmount
+
             val avatarKey = when {
                 avatarInput == null -> existing?.avatarUrl
-                !existing?.avatarUrl.isNullOrBlank() -> existing?.avatarUrl?.let { ensureAvatarKey(it, resolvedUid) }
-                else -> ensureAvatarKey(avatarFilename ?: "$id.jpg", resolvedUid)
+                !existing?.avatarUrl.isNullOrBlank() -> existing?.avatarUrl
+                !resolvedUid.isNullOrBlank() -> "${resolvedUid}.jpg"
+                else -> "${id}.jpg"
             }
             val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
                 runCatching { uploadAvatar(avatarKey!!, avatarInput) }
@@ -144,7 +144,7 @@ class MemberRepository @Inject constructor(
             val localId = dao.insertAndReturn(baseEntity)
 
             val avatarKey = if (avatarInput != null) {
-                ensureAvatarKey(avatarFilename ?: "$localId.jpg", resolvedUid)
+                resolvedUid?.let { "${it}.jpg" } ?: "${localId}.jpg"
             } else null
             val avatarPath = if (avatarInput != null && !avatarKey.isNullOrBlank()) {
                 runCatching { uploadAvatar(avatarKey!!, avatarInput) }
@@ -162,14 +162,11 @@ class MemberRepository @Inject constructor(
 
     suspend fun markDeleted(id: Long?) {
         if (id == null) return
-        val now = Instant.now()
-        dao.softDelete(id, now.toEpochMilli())
-        dao.getById(id)?.let { local ->
-            val deleted = local.copy(isDeleted = true, updatedAt = now)
-            dao.upsert(deleted)
-            runCatching { pushMember(deleted.toDomain()) }
-                .onFailure { Log.e(tag, "remote soft delete failed", it) }
-        }
+        val now = Instant.now().toEpochMilli()
+        dao.softDelete(id, now)
+        runCatching {
+            membersTable.delete { filter { filter("id", FilterOperator.EQ, id)} }
+        }.onFailure { Log.e(tag, "remote delete failed", it) }
     }
 
     suspend fun renew(id: Long?, newExpiry: LocalDate) {
@@ -232,11 +229,7 @@ class MemberRepository @Inject constructor(
     }
 
     private suspend fun fetchRemoteMembers(): List<MemberEntity> =
-        membersTable.select {
-            filter {
-                filter("is_deleted", FilterOperator.EQ, false)
-            }
-        }
+        membersTable.select()
             .decodeList<MemberDto>()
             .map { it.toEntity() }
 
@@ -262,8 +255,13 @@ class MemberRepository @Inject constructor(
     }
 
     private suspend fun pushMember(member: Member) {
+        // Ensure we always include the current uid to satisfy RLS policies on Supabase.
+        val uid = member.uid ?: supabase.client.auth.currentSessionOrNull()?.user?.id
+            ?: error("No auth user available for push")
+        val withUid = member.copy(uid = uid)
+
         // Explicitly upsert on id so updates (e.g., expiration changes) are applied remotely.
-        membersTable.upsert(member.toUpsertDto(), onConflict = "id")
+        membersTable.upsert(withUid.toUpsertDto(), onConflict = "id")
     }
 
     private suspend fun recordPayment(memberId: Long, amount: Double) {
@@ -288,12 +286,6 @@ class MemberRepository @Inject constructor(
 
     private suspend fun uploadAvatar(path: String, data: InputStream) =
         storage.from(avatarBucketName).upload(path, data.readBytes(), upsert = true)
-
-    private fun ensureAvatarKey(key: String, uid: String?): String {
-        if (uid.isNullOrBlank()) return key
-        val normalized = key.trimStart('/')
-        return if (normalized.startsWith("$uid/")) normalized else "$uid/$normalized"
-    }
 
     suspend fun getAvatarUrl(path: String): String? =
         runCatching { storage.from(avatarBucketName).createSignedUrl(path, 30.minutes) }.getOrNull()
